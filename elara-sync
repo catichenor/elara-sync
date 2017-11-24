@@ -1,0 +1,175 @@
+#!/usr/bin/env python
+
+"""
+   Copyright 2017 The Foundry Visionmongers Ltd
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+     http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+"""
+
+"""
+TODOs:
+ - Reinstate existing context support
+ - Report outcome of transactions
+ - Be aware of active transactions
+ - Use logging
+ - Detect file overwrite (MD5 or last mod time)
+"""
+import os
+import sys
+import time
+import json
+import argparse
+import logging
+
+from context import Context, ContextEncoder, ContextDecoder, ContextSelector
+from pyorbit import OrbitAPI
+from state_analyzer import StateAnalyzer, StateAnalyzerException
+from transaction_manager import TransactionManager
+
+
+def get_config_path():
+    """
+    The location of our context.json file, storing last used groupID and mountID.
+    """
+    return os.path.join(os.getenv("HOME"), ".elara", "orbit", "context.json")
+
+def ask_for_context(orbit):
+    """
+    Begin the process of user selection of available contexts.
+    """
+    selector = ContextSelector(orbit)
+    return selector.ask_for_context()
+
+def find_existing_context(orbit):
+    """ 
+    Look for the stored context on disk and validate it can be accessed
+    """
+    # if os.path.exists(get_config_path()):
+    #     try:
+    #         choice = input("Previous Context detected. Would you like to try to use it? [Y/n]")
+    #         if choice == "n":
+    #             return None
+    #     except SyntaxError:
+    #         return None
+
+    # try:
+    #     with open(get_config_path(), "r") as json_data:
+    #         context_ids = json.load(json_data, object_hook=ContextDecoder)
+    #         selector = ContextSelector(orbit)
+    #         return selector.find_context(context_ids)
+    # except IOError:
+    #     pass
+    # except ValueError:
+    #     pass
+    return None
+
+def store_context(context):
+    p = get_config_path()
+    logging.debug("Storing Context at {}".format(p))
+    json_file = open(p, "w")
+    json.dump(context, json_file, cls=ContextEncoder)
+    json_file.close()
+
+# def watch_local(transaction_manager):
+#     """
+#     Observe events on the local filesystem. The ElaraHandler will manage them
+#     """
+#     event_handler = ElaraHandler(transaction_manager)
+#     observer = Observer()
+#     observer.schedule(event_handler, transaction_manager.local_path, recursive=True)
+#     observer.start()
+#     try:
+#         while True:
+#             time.sleep(1)
+#     except KeyboardInterrupt:
+#         observer.stop()
+#     observer.join()
+
+def setup_logging():
+    logging.getLogger("requests").setLevel(logging.WARNING)
+    logging.getLogger("urllib3").setLevel(logging.WARNING)
+
+    root = logging.getLogger()
+    root.setLevel(logging.DEBUG)
+
+    ch = logging.StreamHandler(sys.stdout)
+    ch.setLevel(logging.DEBUG)
+    formatter = logging.Formatter('%(asctime)s - elara-sync - %(levelname)s - %(message)s')
+    ch.setFormatter(formatter)
+    root.addHandler(ch)
+
+
+if __name__ == "__main__":
+    setup_logging()
+    logging.info("--------- Elara Sync ---------")
+    parser = argparse.ArgumentParser(description="Sync a local folder with an Elara storage location. Please ensure you have Orbit running and logged in.")
+    parser.add_argument("-l", "--local", help="Local path to monitor, defaults to pwd.", default=".", dest="local")
+    parser.add_argument("-r", "--remote", help="Remote path to monitor, defaults to /sync. Remote path is relative to the chosen context and mount.", default="/sync", dest="remote")
+    parser.add_argument("-d", "--depth", help="Depth of folder recursion for Remote path, defaults to 2.", default="2", dest="depth")
+    parser.add_argument("-p", "--period", help="Period to check for remote changes in seconds, defaults to 30.", default="30", dest="period")
+    args = parser.parse_args()
+
+    orbit = OrbitAPI()
+
+    context = find_existing_context(orbit)
+    if not context:
+        context = ask_for_context(orbit)
+
+    if not context:
+        logging.error("Unable to get context. Is Orbit running and authenticated?")
+        sys.exit(1)
+
+    # Save selected Context for next time
+    store_context(context)
+
+    # Establish local path to monitor
+    local_path = args.local
+    remote_path = args.remote
+    period = float(args.period)
+
+    # Sanity checking - LOCAL
+    # TODO
+    # Sanity checking - REMOTE
+    if not remote_path.startswith("/"):
+        remote_path = "/" + remote_path
+
+    logging.info("Sync active for:")
+    logging.info(" - Local:  {}".format(os.path.realpath(local_path)))
+    logging.info(" - Remote: {}{}".format(context.mount['mountLocation'], remote_path))
+
+    # Setup the transaction manager
+    transaction_manager = TransactionManager(orbit, context, remote_path, local_path)
+
+    # The analyzer works out what is missing at each end
+    analyzer = StateAnalyzer(orbit, context, remote_path, local_path, args.depth)
+    
+    try:
+        while 1:
+            while 1:
+                try:
+                    unique_in_local, unique_in_remote = analyzer.diff()
+                    break
+                except StateAnalyzerException as e:
+                    print e
+                    time.sleep(5)
+
+            logging.info("unique_in_local: {}".format(unique_in_local))
+            logging.info("unique_in_remote: {}".format(unique_in_remote))
+            transaction_manager.uploadMulti(unique_in_local)
+            transaction_manager.downloadMulti(unique_in_remote)
+
+            time.sleep(period)
+
+    except (KeyboardInterrupt, SystemExit):
+        logging.info("--------- Elara Sync exit ---------")
+    
