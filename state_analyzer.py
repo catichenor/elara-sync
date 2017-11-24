@@ -84,7 +84,7 @@ class StateAnalyzer(object):
         # Cleanup double slashes
         remote_path = remote_path.replace("//", "/")
 
-        logging.debug("Getting remote file listing for {}".format(remote_path))
+        #logging.debug("Getting remote file listing for {}".format(remote_path))
 
         depth = relative_path.count("/")
         if depth > self.depth:
@@ -108,14 +108,14 @@ class StateAnalyzer(object):
         files = response['files']
         for f in files:
             filename = f['name']
+
+            # Ignore hidden files - could bite us later!
             if filename[0] == ".":
                 continue
 
             # Ignore temporary files
             if filename.endswith(".tmp"):
                 continue
-
-            #print filename
 
             if f['type'] == "DIRECTORY":
                 # recurse

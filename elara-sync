@@ -53,24 +53,25 @@ def find_existing_context(orbit):
     """ 
     Look for the stored context on disk and validate it can be accessed
     """
-    # if os.path.exists(get_config_path()):
-    #     try:
-    #         choice = input("Previous Context detected. Would you like to try to use it? [Y/n]")
-    #         if choice == "n":
-    #             return None
-    #     except SyntaxError:
-    #         return None
+    if os.path.exists(get_config_path()):
+        try:
+            choice = raw_input("Previous Context detected. Would you like to try to use it? [Y/n]")
+            if choice == "n":
+                return None
+        except SyntaxError:
+            return None
+        except EOFError:
+            pass
 
-    # try:
-    #     with open(get_config_path(), "r") as json_data:
-    #         context_ids = json.load(json_data, object_hook=ContextDecoder)
-    #         selector = ContextSelector(orbit)
-    #         return selector.find_context(context_ids)
-    # except IOError:
-    #     pass
-    # except ValueError:
-    #     pass
-    return None
+    try:
+        with open(get_config_path(), "r") as json_data:
+            context_ids = json.load(json_data, object_hook=ContextDecoder)
+            selector = ContextSelector(orbit)
+            return selector.find_context(context_ids)
+    except IOError:
+        pass
+    except ValueError:
+        pass
 
 def store_context(context):
     p = get_config_path()
@@ -94,30 +95,33 @@ def store_context(context):
 #         observer.stop()
 #     observer.join()
 
-def setup_logging():
+def setup_logging(level):
     logging.getLogger("requests").setLevel(logging.WARNING)
     logging.getLogger("urllib3").setLevel(logging.WARNING)
 
+    logging_level = logging.getLevelName(level)
     root = logging.getLogger()
-    root.setLevel(logging.DEBUG)
+    root.setLevel(logging_level)
 
     ch = logging.StreamHandler(sys.stdout)
-    ch.setLevel(logging.DEBUG)
+    ch.setLevel(logging_level)
     formatter = logging.Formatter('%(asctime)s - elara-sync - %(levelname)s - %(message)s')
     ch.setFormatter(formatter)
     root.addHandler(ch)
 
 
 if __name__ == "__main__":
-    setup_logging()
-    logging.info("--------- Elara Sync ---------")
     parser = argparse.ArgumentParser(description="Sync a local folder with an Elara storage location. Please ensure you have Orbit running and logged in.")
     parser.add_argument("-l", "--local", help="Local path to monitor, defaults to pwd.", default=".", dest="local")
     parser.add_argument("-r", "--remote", help="Remote path to monitor, defaults to /sync. Remote path is relative to the chosen context and mount.", default="/sync", dest="remote")
     parser.add_argument("-d", "--depth", help="Depth of folder recursion for Remote path, defaults to 2.", default="2", dest="depth")
     parser.add_argument("-p", "--period", help="Period to check for remote changes in seconds, defaults to 30.", default="30", dest="period")
+    parser.add_argument("-v", "--verbosity", help="Logging level (DEBUG,INFO,WARNING,ERROR)", default="INFO", dest="verbosity")
     args = parser.parse_args()
 
+    setup_logging(args.verbosity)
+    logging.info("--------- Elara Sync ---------")
+    
     orbit = OrbitAPI()
 
     context = find_existing_context(orbit)
@@ -159,7 +163,7 @@ if __name__ == "__main__":
                     unique_in_local, unique_in_remote = analyzer.diff()
                     break
                 except StateAnalyzerException as e:
-                    print e
+                    logging.error(e)
                     time.sleep(5)
 
             logging.info("unique_in_local: {}".format(unique_in_local))
