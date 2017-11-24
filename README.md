@@ -6,7 +6,7 @@ A client of the Elara Orbit API which will keep a local folder synchronized with
 Elara-sync is released under the [Apache2](http://www.apache.org/licenses/LICENSE-2.0) license.
 
 ## What is Elara?
-Elara is a cloud-based service for post-production that centralises infrastructure, creative tools and pipeline. Elara is currently in beta, and is owned and operated by [Foundry](https://www.foundry.com)
+Elara is a cloud-based service for post-production that centralises infrastructure, creative tools and pipeline. Elara is currently in beta, and is owned and operated by [Foundry](https://www.foundry.com).
 
 To sign up for news and updates, visit [elara.io](https://elara.io)
 

@@ -20,8 +20,7 @@
 TODOs:
  - Reinstate existing context support
  - Report outcome of transactions
- - Be aware of active transactions
- - Use logging
+ - Be aware of active transactions (currently only aware of those launch during this run)
  - Detect file overwrite (MD5 or last mod time)
 """
 import os

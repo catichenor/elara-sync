@@ -16,11 +16,13 @@
 
 import uuid
 import os
+import logging
 
-from pyorbit import OrbitAPI, OrbitSyncSource, OrbitSyncTarget, OrbitSyncPayload, OrbitSyncDirection
+from pyorbit import OrbitSyncSource, OrbitSyncTarget, OrbitSyncPayload, OrbitSyncDirection
 
 
 class TransactionManager(object):
+    """ Control the bidirectional flow of data """
     def __init__(self, orbit, context, remote_root, local_path):
         super(TransactionManager, self).__init__()
         self.orbit = orbit
@@ -42,7 +44,7 @@ class TransactionManager(object):
                 t = (self.normalize(folder), tuple(files))  
                 h = hash(t)
                 if h in self.active_transactions:
-                    logging.debug("{} - Transaction already requested".format(self.active_transactions[h]))
+                    logging.info("{} - Transaction already requested".format(self.active_transactions[h]))
                 else:
                     self._do_upload(folder=folder, files=files)
 
@@ -51,12 +53,10 @@ class TransactionManager(object):
 
         logging.debug("{} - folder {}".format(transaction_id, folder))
         logging.debug("{} - files {}".format(transaction_id, files))
+        
         folder = folder.replace(self.local_path, "")
-
         folder = self.normalize(folder)
-
         folders = folder.split(os.sep)
-
         
         sources = []
         for f in files:
