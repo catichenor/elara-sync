@@ -20,8 +20,9 @@ Use a virtual environment to provide the (limited) dependencies:
     source venv/bin/activate 
 	pip install -r requirements.txt
 
-### Get dependency
+### Get dependency and copy to current directory
     git clone https://github.com/elara-io/pyorbit.git
+    cp pyorbit/pyorbit.py ./
 
 ### Get help on application arguments
 	./elara-sync --help
